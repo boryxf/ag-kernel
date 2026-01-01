@@ -1,0 +1,15 @@
+[package]
+name = "ag-core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "_ag_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+ag-core-sys = { path = "../ag-core-sys" }
+pyo3 = { workspace = true }
+
+[build-dependencies]
+pyo3-build-config = "0.22"

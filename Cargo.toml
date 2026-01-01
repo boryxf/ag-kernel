@@ -1,0 +1,11 @@
+[workspace]
+members = ["crates/ag-core-sys", "crates/ag-core"]
+resolver = "2"
+
+[workspace.dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = 3

@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Rust
+target/
+Cargo.lock
+*.so
+*.dylib
+*.dll
+
+# Outputs
+outputs/*.png
+outputs/*.json
+outputs/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Build artifacts
+*.o
+*.a
+*.obj
