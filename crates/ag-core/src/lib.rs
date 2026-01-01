@@ -1,5 +1,9 @@
 //! Safe Rust wrapper around the C engine with Python bindings
 
+pub mod candle;
+pub mod candle_parser;
+pub mod market_event;
+
 use ag_core_sys::*;
 use pyo3::prelude::*;
 use std::collections::HashMap;
