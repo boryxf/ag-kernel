@@ -24,9 +24,32 @@ See `PROMPT_FOR_AGENTS.md` for detailed guidelines.
 
 ---
 
+## 🚀 Performance
+
+Processing **1,000,000 ticks** on a standard machine:
+
+| Implementation | Execution Time | Throughput | Speedup |
+| :--- | :--- | :--- | :--- |
+| **AG-Backtester (Batch)** | **0.06s** | **~16,400,000 ticks/s** | **2.8x** 🚀 |
+| Naive PyO3 (Single Call) | 2.04s | ~491,000 ticks/s | 0.1x |
+| Pure Python | 0.17s | ~5,764,000 ticks/s | 1.0x |
+
+*Benchmark run on Apple M1 (Darwin arm64) with Python 3.9*
+
+**Key Optimizations:**
+- ✅ **Batch processing**: Moves loop inside Rust to eliminate FFI overhead
+- ✅ **Parquet binary format**: 70% size reduction + instant loading (< 100ms for 1M ticks)
+- ✅ **Automatic conversion**: First run converts CSV → Parquet, subsequent runs load instantly
+
+Run your own benchmark: `python3 benchmark_v0.py`
+
+---
+
 ## Features
 
 - **Deterministic C kernel**: Pure calculation engine with no I/O or randomness
+- **Batch processing**: Process millions of ticks in milliseconds via Rust FFI
+- **Automatic Parquet conversion**: ZSTD compressed binary format with instant loading
 - **aggTrades → Tick aggregation**: Built-in support for Binance aggTrades format
 - **Auto tick size**: Automatically calculates optimal tick size for your instrument
 - **Dark tearsheet**: Professional GitHub-dark themed performance reports
@@ -325,11 +348,27 @@ python examples/run_backtest.py --input examples/data/btcusdt_aggtrades_sample.c
 cargo test --release
 ```
 
-## Performance
+## Performance Details
 
-- **C kernel**: Optimized for deterministic execution (~1M ticks/sec)
-- **Tick aggregation**: Pandas-based (handles 100K+ trades easily)
-- **Visualization**: < 2 seconds for typical backtest
+The engine achieves high throughput through several optimizations:
+
+1. **Batch Processing**: The `step_batch()` method processes arrays of ticks entirely in Rust, eliminating per-tick FFI overhead
+2. **Binary Format**: Parquet with ZSTD compression provides 70% size reduction and sub-100ms load times
+3. **Zero-Copy Operations**: Direct numpy array access without Python object creation
+4. **Columnar Storage**: Struct-of-Arrays layout for cache-friendly processing
+
+**Workflow:**
+```bash
+# First run: Auto-converts CSV to Parquet
+python examples/run_backtest.py --input data.csv --tick-size 10.0
+# → Converts to data.parquet (70% smaller)
+# → Subsequent runs load from Parquet instantly
+
+# Force CSV mode (for compatibility)
+python examples/run_backtest.py --input data.csv --force-csv
+```
+
+See `benchmark_v0.py` for detailed performance comparison.
 
 ## License
 

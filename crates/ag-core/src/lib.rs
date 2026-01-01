@@ -65,6 +65,48 @@ impl Engine {
         Ok(())
     }
 
+    /// Process a batch of ticks efficiently - accepts integer sides (0=BUY, 1=SELL)
+    pub fn process_tick_batch(
+        &mut self,
+        timestamps: Vec<i64>,
+        price_ticks: Vec<i64>,
+        qtys: Vec<f64>,
+        sides: Vec<u8>,
+    ) -> Result<(), String> {
+        // Validate all vectors have same length
+        let n = timestamps.len();
+        if price_ticks.len() != n || qtys.len() != n || sides.len() != n {
+            return Err(format!(
+                "Vector length mismatch: timestamps={}, price_ticks={}, qtys={}, sides={}",
+                n, price_ticks.len(), qtys.len(), sides.len()
+            ));
+        }
+
+        // Process all ticks in the batch
+        for i in 0..n {
+            let side_enum = match sides[i] {
+                0 => side_t::SIDE_BUY,
+                1 => side_t::SIDE_SELL,
+                _ => return Err(format!("Invalid side value: {} (must be 0 or 1)", sides[i])),
+            };
+
+            let tick = tick_event_t {
+                ts_ms: timestamps[i],
+                price_tick: price_ticks[i],
+                qty: (qtys[i] * 1000000.0) as i64, // Convert to integer representation
+                side: side_enum,
+            };
+
+            let result = unsafe { engine_step_tick(self.handle, &tick) };
+
+            if result < 0 {
+                return Err(format!("Engine step failed at tick {} with code: {}", i, result));
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn place_order(
         &mut self,
         order_type: &str,
@@ -182,6 +224,18 @@ impl PyEngine {
     fn step_tick(&mut self, ts_ms: i64, price_tick_i64: i64, qty: f64, side: &str) -> PyResult<()> {
         self.inner
             .step_tick(ts_ms, price_tick_i64, qty, side)
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
+    }
+
+    fn step_batch(
+        &mut self,
+        timestamps: Vec<i64>,
+        price_ticks: Vec<i64>,
+        qtys: Vec<f64>,
+        sides: Vec<u8>,
+    ) -> PyResult<()> {
+        self.inner
+            .process_tick_batch(timestamps, price_ticks, qtys, sides)
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e))
     }
 

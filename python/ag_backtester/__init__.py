@@ -18,4 +18,8 @@ except ImportError:
 from .engine import Engine, EngineConfig
 from .results import BacktestResult
 
-__all__ = ["Engine", "EngineConfig", "BacktestResult", "_ag_core"]
+# Side constants for batch processing
+SIDE_BUY = 0
+SIDE_SELL = 1
+
+__all__ = ["Engine", "EngineConfig", "BacktestResult", "_ag_core", "SIDE_BUY", "SIDE_SELL"]

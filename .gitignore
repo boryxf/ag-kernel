@@ -14,11 +14,21 @@ Cargo.lock
 *.so
 *.dylib
 *.dll
+*.pyd
+
+# Maturin
+.maturin/
 
 # Outputs
 outputs/*.png
 outputs/*.json
 outputs/*.csv
+outputs/*.parquet
+outputs/parquet_benchmark/
+
+# Generated data
+*.parquet
+bench_data.csv
 
 # IDE
 .vscode/
@@ -31,3 +41,7 @@ outputs/*.csv
 *.o
 *.a
 *.obj
+
+# Claude agent logs (keep agents/ folder, ignore internal logs)
+.claude/logs/
+.claude/.cache/

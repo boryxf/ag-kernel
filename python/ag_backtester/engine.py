@@ -95,6 +95,29 @@ class Engine:
         snapshot.ts_ms = tick.ts_ms
         self._history.append(snapshot)
 
+    def step_batch(self, timestamps, price_ticks, qtys, sides):
+        """
+        Process a batch of ticks efficiently.
+
+        Args:
+            timestamps: numpy array of int64 timestamps
+            price_ticks: numpy array of int64 price ticks
+            qtys: numpy array of float64 quantities
+            sides: numpy array of uint8 sides (0=BUY, 1=SELL)
+        """
+        if self._core:
+            self._core.step_batch(
+                timestamps.tolist(),
+                price_ticks.tolist(),
+                qtys.tolist(),
+                sides.tolist()
+            )
+        else:
+            # Stub: process one by one
+            for i in range(len(timestamps)):
+                # Update stub state
+                pass
+
     def place_order(self, order: Order):
         """Place an order"""
         if self._core:
