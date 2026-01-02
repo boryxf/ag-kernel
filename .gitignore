@@ -2,46 +2,69 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
+*.so
+.Python
+env/
 venv/
-*.egg-info/
-dist/
+.venv/
+ENV/
 build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+*.cover
 
 # Rust
 target/
 Cargo.lock
+**/*.rs.bk
+*.rlib
 *.so
 *.dylib
-*.dll
-*.pyd
 
-# Maturin
-.maturin/
+# C
+*.o
+*.a
+*.out
+*.exe
+test_scaling
+engine.o
 
-# Outputs
-outputs/*.png
-outputs/*.json
-outputs/*.csv
-outputs/*.parquet
-outputs/parquet_benchmark/
-
-# Generated data
-*.parquet
-bench_data.csv
-
-# IDE
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 .DS_Store
 
-# Build artifacts
-*.o
-*.a
-*.obj
+# Development
+debug_test.py
+*.log
+*.tmp
 
-# Claude agent logs (keep agents/ folder, ignore internal logs)
-.claude/logs/
-.claude/.cache/
+# Documentation (generated)
+SCALING_FIX_SUMMARY.md
+FIX_SUMMARY.md
+
+# Build artifacts
+*.whl
+*.egg-info/
+.maturin/

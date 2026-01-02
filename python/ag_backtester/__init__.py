@@ -11,7 +11,7 @@ __version__ = "0.1.0"
 
 # Import Rust extension if available
 try:
-    from . import _ag_core
+    import _ag_core
 except ImportError:
     _ag_core = None
 

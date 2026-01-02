@@ -5,6 +5,11 @@
 
 #define MAX_OPEN_ORDERS 1024
 
+// SCALING CONVENTION:
+// - Quantities (order->qty, position) are scaled by 1,000,000 from Rust side
+// - When doing financial calculations (notional, PnL), must divide by 1,000,000.0
+// - Price ticks and tick_size remain unscaled
+
 // Internal order tracking
 typedef struct {
     order_t order;
@@ -36,8 +41,10 @@ static double calculate_unrealized_pnl(engine_handle_t* h) {
         return 0.0;
     }
 
-    double position_value = (double)h->position * (double)h->last_tick_price * h->config.tick_size;
-    double entry_value = (double)h->position * h->avg_entry_price * h->config.tick_size;
+    // Position is scaled by 1,000,000 from Rust side - descale for calculations
+    double position_descaled = (double)h->position / 1000000.0;
+    double position_value = position_descaled * (double)h->last_tick_price * h->config.tick_size;
+    double entry_value = position_descaled * h->avg_entry_price * h->config.tick_size;
 
     return position_value - entry_value;
 }
@@ -67,7 +74,8 @@ static int64_t apply_spread(engine_handle_t* h, int64_t price_tick, side_t side)
 static int execute_fill(engine_handle_t* h, order_t* order, int64_t fill_price_tick) {
     int64_t fill_qty = order->qty;
     double fill_price = (double)fill_price_tick * h->config.tick_size;
-    double notional = fill_price * (double)fill_qty;
+    // Quantity is scaled by 1,000,000 from Rust side - descale for notional calculation
+    double notional = fill_price * ((double)fill_qty / 1000000.0);
 
     // Calculate fee (assuming taker fee for simplicity)
     double fee = calculate_fee(h, notional, 0);
@@ -91,22 +99,27 @@ static int execute_fill(engine_handle_t* h, order_t* order, int64_t fill_price_t
     } else if ((old_position > 0 && order->side == SIDE_BUY) ||
                (old_position < 0 && order->side == SIDE_SELL)) {
         // Adding to position - update average entry price
+        // Positions are already scaled, so we work directly with them for weighted average
         double old_value = (double)old_position * h->avg_entry_price;
         double new_value = (double)fill_qty * (double)fill_price_tick;
         h->avg_entry_price = (old_value + new_value) / (double)new_position;
     } else {
         // Reducing or flipping position - realize PnL
-        int64_t qty_reducing = (abs(old_position) >= fill_qty) ? fill_qty : abs(old_position);
+        int64_t qty_reducing = (llabs(old_position) >= fill_qty) ? fill_qty : llabs(old_position);
 
-        double exit_value = (double)qty_reducing * (double)fill_price_tick * h->config.tick_size;
-        double entry_value = (double)qty_reducing * h->avg_entry_price * h->config.tick_size;
+        // qty_reducing is scaled by 1,000,000 - descale for PnL calculations
+        double qty_reducing_descaled = (double)qty_reducing / 1000000.0;
+        double exit_value = qty_reducing_descaled * (double)fill_price_tick * h->config.tick_size;
+        double entry_value = qty_reducing_descaled * h->avg_entry_price * h->config.tick_size;
 
         if (old_position > 0) {
             // Closing long position
-            h->realized_pnl += (exit_value - entry_value - fee);
+            // Note: fee is already deducted from cash, so PnL shows gross profit
+            h->realized_pnl += (exit_value - entry_value);
         } else {
             // Closing short position
-            h->realized_pnl += (entry_value - exit_value - fee);
+            // Note: fee is already deducted from cash, so PnL shows gross profit
+            h->realized_pnl += (entry_value - exit_value);
         }
 
         // If flipping position, set new average entry price

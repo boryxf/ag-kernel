@@ -100,18 +100,19 @@ class Engine:
         Process a batch of ticks efficiently.
 
         Args:
-            timestamps: numpy array of int64 timestamps
-            price_ticks: numpy array of int64 price ticks
-            qtys: numpy array of float64 quantities
-            sides: numpy array of uint8 sides (0=BUY, 1=SELL)
+            timestamps: list or numpy array of int64 timestamps
+            price_ticks: list or numpy array of int64 price ticks
+            qtys: list or numpy array of float64 quantities
+            sides: list or numpy array of uint8 sides (0=BUY, 1=SELL)
         """
         if self._core:
-            self._core.step_batch(
-                timestamps.tolist(),
-                price_ticks.tolist(),
-                qtys.tolist(),
-                sides.tolist()
-            )
+            # Convert to list if needed (handles both lists and numpy arrays)
+            ts_list = timestamps if isinstance(timestamps, list) else timestamps.tolist()
+            pt_list = price_ticks if isinstance(price_ticks, list) else price_ticks.tolist()
+            qty_list = qtys if isinstance(qtys, list) else qtys.tolist()
+            side_list = sides if isinstance(sides, list) else sides.tolist()
+
+            self._core.step_batch(ts_list, pt_list, qty_list, side_list)
         else:
             # Stub: process one by one
             for i in range(len(timestamps)):
