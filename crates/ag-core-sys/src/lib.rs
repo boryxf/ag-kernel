@@ -223,6 +223,321 @@ impl agtick_record_legacy_t {
     }
 }
 
+// ========== Candle Types and Functions ==========
+
+/// OHLCV candle structure
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct candle_t {
+    pub ts_ms: i64,
+    pub open_tick: i64,
+    pub high_tick: i64,
+    pub low_tick: i64,
+    pub close_tick: i64,
+    pub volume: c_double,
+    pub buy_volume: c_double,
+    pub sell_volume: c_double,
+    pub trade_count: u64,
+}
+
+/// Opaque handle for streaming candle aggregator
+#[repr(C)]
+pub struct candle_aggregator_s {
+    _private: [u8; 0],
+}
+
+pub type candle_aggregator_t = candle_aggregator_s;
+
+extern "C" {
+    /// Aggregate tick data into candles at specified interval
+    pub fn candles_aggregate(
+        timestamps: *const i64,
+        price_ticks: *const i64,
+        qtys: *const c_double,
+        sides: *const u8,
+        count: usize,
+        interval_ms: i64,
+        candles_out: *mut candle_t,
+        max_candles: usize,
+    ) -> i64;
+
+    /// Resample candles to a larger interval
+    pub fn candles_resample(
+        candles: *const candle_t,
+        count: usize,
+        input_ms: i64,
+        output_ms: i64,
+        candles_out: *mut candle_t,
+        max_candles: usize,
+    ) -> i64;
+
+    /// Create a new streaming candle aggregator
+    pub fn candle_aggregator_new(interval_ms: i64) -> *mut candle_aggregator_t;
+
+    /// Free a candle aggregator
+    pub fn candle_aggregator_free(agg: *mut candle_aggregator_t);
+
+    /// Reset the aggregator state
+    pub fn candle_aggregator_reset(agg: *mut candle_aggregator_t);
+
+    /// Process a single tick through the aggregator
+    /// Returns 1 if candle completed, 0 if not, negative on error
+    pub fn candle_aggregator_update(
+        agg: *mut candle_aggregator_t,
+        ts_ms: i64,
+        price_tick: i64,
+        qty: c_double,
+        side: u8,
+        candle_out: *mut candle_t,
+    ) -> c_int;
+
+    /// Flush the current incomplete candle
+    pub fn candle_aggregator_flush(
+        agg: *mut candle_aggregator_t,
+        candle_out: *mut candle_t,
+    ) -> c_int;
+
+    /// Get the current incomplete candle without flushing
+    pub fn candle_aggregator_peek(
+        agg: *const candle_aggregator_t,
+        candle_out: *mut candle_t,
+    ) -> c_int;
+}
+
+// ========== Volume Types and Functions ==========
+
+/// Volume profile bin structure
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct volume_bin_t {
+    pub price_tick: i64,
+    pub volume: c_double,
+    pub buy_volume: c_double,
+    pub sell_volume: c_double,
+}
+
+/// Volume profile result structure
+#[repr(C)]
+#[derive(Debug)]
+pub struct volume_profile_t {
+    pub bins: *mut volume_bin_t,
+    pub num_bins: usize,
+    pub poc_tick: i64,
+    pub vah_tick: i64,
+    pub val_tick: i64,
+    pub total_volume: c_double,
+}
+
+extern "C" {
+    /// Calculate VWAP for tick data
+    pub fn vwap_calculate(
+        timestamps: *const i64,
+        price_ticks: *const i64,
+        qtys: *const c_double,
+        count: usize,
+        tick_size: c_double,
+        vwap_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate session VWAP (resets at each new day)
+    pub fn vwap_session_calculate(
+        timestamps: *const i64,
+        price_ticks: *const i64,
+        qtys: *const c_double,
+        count: usize,
+        tick_size: c_double,
+        vwap_out: *mut c_double,
+    ) -> c_int;
+
+    /// Build a volume profile from tick data
+    pub fn volume_profile_build(
+        price_ticks: *const i64,
+        qtys: *const c_double,
+        sides: *const u8,
+        count: usize,
+        tick_size: c_double,
+        num_bins: usize,
+        value_area_pct: c_double,
+        profile_out: *mut volume_profile_t,
+    ) -> c_int;
+
+    /// Free memory allocated for a volume profile
+    pub fn volume_profile_free(profile: *mut volume_profile_t);
+
+    /// Calculate cumulative delta (buy volume - sell volume)
+    pub fn cumulative_delta_calculate(
+        qtys: *const c_double,
+        sides: *const u8,
+        count: usize,
+        delta_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate delta per candle period
+    pub fn delta_per_candle(
+        timestamps: *const i64,
+        qtys: *const c_double,
+        sides: *const u8,
+        count: usize,
+        interval_ms: i64,
+        delta_out: *mut c_double,
+        max_candles: usize,
+    ) -> i64;
+
+    /// Calculate On-Balance Volume (OBV)
+    pub fn obv_calculate(
+        price_ticks: *const i64,
+        qtys: *const c_double,
+        count: usize,
+        obv_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Money Flow Index (MFI)
+    pub fn mfi_calculate(
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        volumes: *const c_double,
+        count: usize,
+        period: c_int,
+        mfi_out: *mut c_double,
+    ) -> c_int;
+}
+
+// ========== Volatility Types and Functions ==========
+
+/// Volatility calculation method
+#[repr(C)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum volatility_method_t {
+    VOL_METHOD_REALIZED = 0,
+    VOL_METHOD_PARKINSON = 1,
+    VOL_METHOD_GARMAN_KLASS = 2,
+    VOL_METHOD_ROGERS_SATCHELL = 3,
+    VOL_METHOD_YANG_ZHANG = 4,
+    VOL_METHOD_EWMA = 5,
+}
+
+/// Opaque handle for streaming volatility state
+#[repr(C)]
+pub struct volatility_state_s {
+    _private: [u8; 0],
+}
+
+pub type volatility_state_t = volatility_state_s;
+
+extern "C" {
+    /// Calculate realized volatility (close-to-close)
+    pub fn volatility_realized(
+        close_ticks: *const i64,
+        count: usize,
+        window: c_int,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Parkinson volatility (high-low range estimator)
+    pub fn volatility_parkinson(
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        count: usize,
+        window: c_int,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Garman-Klass volatility
+    pub fn volatility_garman_klass(
+        open_ticks: *const i64,
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        count: usize,
+        window: c_int,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Rogers-Satchell volatility
+    pub fn volatility_rogers_satchell(
+        open_ticks: *const i64,
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        count: usize,
+        window: c_int,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Yang-Zhang volatility
+    pub fn volatility_yang_zhang(
+        open_ticks: *const i64,
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        count: usize,
+        window: c_int,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate EWMA volatility
+    pub fn volatility_ewma(
+        close_ticks: *const i64,
+        count: usize,
+        lambda: c_double,
+        annualize: bool,
+        vol_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate Average True Range (ATR)
+    pub fn atr_calculate(
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        count: usize,
+        period: c_int,
+        tick_size: c_double,
+        atr_out: *mut c_double,
+    ) -> c_int;
+
+    /// Calculate True Range for each candle
+    pub fn true_range_calculate(
+        high_ticks: *const i64,
+        low_ticks: *const i64,
+        close_ticks: *const i64,
+        count: usize,
+        tick_size: c_double,
+        tr_out: *mut c_double,
+    ) -> c_int;
+
+    /// Create a new streaming volatility calculator
+    pub fn volatility_state_new(
+        method: volatility_method_t,
+        window: c_int,
+        param: c_double,
+        annualize: bool,
+    ) -> *mut volatility_state_t;
+
+    /// Free a volatility state
+    pub fn volatility_state_free(state: *mut volatility_state_t);
+
+    /// Reset volatility state
+    pub fn volatility_state_reset(state: *mut volatility_state_t);
+
+    /// Update streaming volatility with a new candle
+    pub fn volatility_state_update(
+        state: *mut volatility_state_t,
+        open_tick: i64,
+        high_tick: i64,
+        low_tick: i64,
+        close_tick: i64,
+    ) -> c_double;
+
+    /// Get current volatility estimate without adding new data
+    pub fn volatility_state_current(state: *const volatility_state_t) -> c_double;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

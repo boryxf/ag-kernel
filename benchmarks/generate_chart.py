@@ -1,17 +1,10 @@
 #!/usr/bin/env python3
 """
 Generate professional benchmark comparison chart for ag-kernel README.
-
-This script creates a dark-themed bar chart comparing processing methods:
-- Pure Python (pandas iterrows simulation)
-- PyO3 single tick mode
-- PyO3 batch mode
-- PyO3 NumPy batch (zero-copy)
-
+Shows both tick processing and analytics performance.
 Output: docs/benchmark_chart.png
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -20,7 +13,6 @@ import matplotlib.ticker as mticker
 import numpy as np
 
 # Configuration
-BENCHMARK_RESULTS_PATH = Path(__file__).parent / "results" / "final.json"
 OUTPUT_PATH = Path(__file__).parent.parent / "docs" / "benchmark_chart.png"
 
 # Dark theme colors
@@ -30,13 +22,14 @@ COLORS = {
     'text': '#e8e8e8',
     'text_secondary': '#a0a0a0',
     'grid': '#2a2a4a',
+    'python': '#e94560',
+    'c_engine': '#00d9ff',
     'bars': ['#e94560', '#f39c12', '#3498db', '#00d9ff'],
-    'highlight': '#00d9ff',
 }
 
 
-def format_ticks_per_sec(value: float) -> str:
-    """Format ticks/sec with appropriate suffix."""
+def format_rate(value: float) -> str:
+    """Format rate with appropriate suffix."""
     if value >= 1_000_000_000:
         return f"{value / 1_000_000_000:.1f}B"
     elif value >= 1_000_000:
@@ -47,183 +40,88 @@ def format_ticks_per_sec(value: float) -> str:
         return f"{value:.0f}"
 
 
-def load_benchmark_data(path: Path) -> dict:
-    """Load benchmark results from JSON file."""
-    if not path.exists():
-        print(f"Error: Benchmark file not found: {path}")
-        print("Run the benchmark first: python benchmarks/final_benchmark.py")
-        sys.exit(1)
-
-    with open(path) as f:
-        return json.load(f)
-
-
-def extract_performance_data(results: dict) -> tuple[list, list]:
-    """Extract performance metrics for the chart."""
-    tick_processing = results.get('tick_processing', {})
-    aggregation = results.get('aggregation', {})
-
-    # Extract values with fallbacks
-    python_dict_rate = aggregation.get('python_dict_per_sec', 62000)
-    single_tick_rate = tick_processing.get('single_tick_per_sec', 537000)
-    batch_rate = tick_processing.get('batch_ticks_per_sec', 14_000_000)
-    numpy_batch_rate = tick_processing.get('numpy_batch_per_sec', 626_000_000)
-
-    labels = [
-        'Pure Python\n(dict iteration)',
-        'Single Tick\n(PyO3)',
-        'Batch Mode\n(PyO3)',
-        'NumPy Batch\n(zero-copy)',
-    ]
-
-    values = [
-        python_dict_rate,
-        single_tick_rate,
-        batch_rate,
-        numpy_batch_rate,
-    ]
-
-    return labels, values
-
-
-def create_benchmark_chart(labels: list, values: list, output_path: Path) -> None:
-    """Create the benchmark comparison bar chart."""
-    # Set up the figure with dark background
+def create_benchmark_chart(output_path: Path) -> None:
+    """Create the benchmark comparison chart with two panels."""
     plt.style.use('dark_background')
-    fig, ax = plt.subplots(figsize=(12, 7), facecolor=COLORS['background'])
-    ax.set_facecolor(COLORS['panel'])
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7), facecolor=COLORS['background'])
 
-    # Create bar positions
-    x = np.arange(len(labels))
-    bar_width = 0.6
+    # ========== Left Panel: Tick Processing ==========
+    ax1.set_facecolor(COLORS['panel'])
 
-    # Create gradient-like effect with individual colors
-    bars = ax.bar(x, values, bar_width, color=COLORS['bars'], edgecolor='none',
-                  zorder=3)
+    tick_labels = ['Pure Python\n(dict iter)', 'Single Tick\n(PyO3)', 'Batch Mode\n(PyO3)', 'NumPy Batch\n(zero-copy)']
+    tick_values = [62_000, 537_000, 14_000_000, 626_000_000]
 
-    # Add value labels on top of bars
-    for bar, value in zip(bars, values):
-        height = bar.get_height()
-        label_text = format_ticks_per_sec(value)
+    x1 = np.arange(len(tick_labels))
+    bars1 = ax1.bar(x1, tick_values, 0.6, color=COLORS['bars'], edgecolor='none', zorder=3)
 
-        # Position label above bar
-        ax.annotate(
-            label_text,
-            xy=(bar.get_x() + bar.get_width() / 2, height),
-            xytext=(0, 8),
-            textcoords="offset points",
-            ha='center',
-            va='bottom',
-            fontsize=14,
-            fontweight='bold',
-            color=COLORS['text'],
-        )
+    # Value labels
+    for bar, value in zip(bars1, tick_values):
+        ax1.annotate(format_rate(value), xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                    xytext=(0, 8), textcoords="offset points", ha='center', va='bottom',
+                    fontsize=13, fontweight='bold', color=COLORS['text'])
 
-    # Configure axes
-    ax.set_ylabel('Ticks per Second', fontsize=14, color=COLORS['text'],
-                  fontweight='bold', labelpad=15)
-    ax.set_xlabel('Processing Method', fontsize=14, color=COLORS['text'],
-                  fontweight='bold', labelpad=15)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=11, color=COLORS['text'])
-
-    # Use log scale for y-axis to show dramatic differences
-    ax.set_yscale('log')
-
-    # Custom y-axis formatter
-    def log_formatter(x, pos):
-        if x >= 1_000_000_000:
-            return f'{x / 1_000_000_000:.0f}B'
-        elif x >= 1_000_000:
-            return f'{x / 1_000_000:.0f}M'
-        elif x >= 1_000:
-            return f'{x / 1_000:.0f}K'
-        return f'{x:.0f}'
-
-    ax.yaxis.set_major_formatter(mticker.FuncFormatter(log_formatter))
-
-    # Set y-axis limits with padding
-    ax.set_ylim(10_000, 2_000_000_000)
-
-    # Style grid
-    ax.grid(True, axis='y', linestyle='--', alpha=0.3, color=COLORS['grid'],
-            zorder=1)
-    ax.set_axisbelow(True)
-
-    # Style spines
-    for spine in ax.spines.values():
+    ax1.set_ylabel('Ticks per Second', fontsize=12, color=COLORS['text'], fontweight='bold')
+    ax1.set_title('Tick Processing', fontsize=16, fontweight='bold', color=COLORS['text'], pad=15)
+    ax1.set_xticks(x1)
+    ax1.set_xticklabels(tick_labels, fontsize=10, color=COLORS['text'])
+    ax1.set_yscale('log')
+    ax1.set_ylim(10_000, 2_000_000_000)
+    ax1.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, p: format_rate(x)))
+    ax1.grid(True, axis='y', linestyle='--', alpha=0.3, color=COLORS['grid'], zorder=1)
+    for spine in ax1.spines.values():
         spine.set_color(COLORS['grid'])
-        spine.set_linewidth(0.5)
 
-    # Title with styling
-    ax.set_title(
-        'ag-kernel Performance Comparison',
-        fontsize=20,
-        fontweight='bold',
-        color=COLORS['text'],
-        pad=20
-    )
+    # Speedup annotation
+    ax1.annotate('10Kx faster', xy=(3, 626_000_000), xytext=(2.4, 2_500_000_000),
+                fontsize=11, color=COLORS['c_engine'], fontweight='bold',
+                arrowprops=dict(arrowstyle='->', color=COLORS['c_engine'], lw=1.5))
 
-    # Add subtitle with version info
-    fig.text(
-        0.5, 0.92,
-        'Benchmark: 1M ticks on Apple M1 | v0.3.0',
-        ha='center',
-        fontsize=10,
-        color=COLORS['text_secondary'],
-        style='italic'
-    )
+    # ========== Right Panel: Analytics Performance ==========
+    ax2.set_facecolor(COLORS['panel'])
 
-    # Add speedup annotations
-    speedup_batch = values[2] / values[0]
-    speedup_numpy = values[3] / values[0]
+    analytics_labels = ['Candles', 'VWAP', 'Volume\nProfile', 'Cumulative\nDelta', 'Volatility']
+    py_values = [64_000, 95_000_000, 32_000_000, 218_000_000, 225_000]
+    c_values = [84_000_000, 402_000_000, 304_000_000, 1_098_000_000, 114_000_000]
+    speedups = [1307, 4.2, 9.6, 5.0, 507]
 
-    # Annotation for batch mode speedup
-    ax.annotate(
-        f'{speedup_batch:.0f}x faster',
-        xy=(2, values[2]),
-        xytext=(2.3, values[2] * 0.15),
-        fontsize=10,
-        color=COLORS['bars'][2],
-        fontweight='bold',
-        arrowprops=dict(
-            arrowstyle='->',
-            color=COLORS['bars'][2],
-            lw=1.5,
-            connectionstyle='arc3,rad=-0.2'
-        )
-    )
+    x2 = np.arange(len(analytics_labels))
+    width = 0.35
 
-    # Annotation for numpy batch speedup
-    ax.annotate(
-        f'{speedup_numpy / 1000:.0f}Kx faster',
-        xy=(3, values[3]),
-        xytext=(2.5, values[3] * 2.5),
-        fontsize=10,
-        color=COLORS['bars'][3],
-        fontweight='bold',
-        arrowprops=dict(
-            arrowstyle='->',
-            color=COLORS['bars'][3],
-            lw=1.5,
-            connectionstyle='arc3,rad=0.2'
-        )
-    )
+    bars_py = ax2.bar(x2 - width/2, py_values, width, label='Python/NumPy',
+                      color=COLORS['python'], edgecolor='none', zorder=3)
+    bars_c = ax2.bar(x2 + width/2, c_values, width, label='C Implementation',
+                     color=COLORS['c_engine'], edgecolor='none', zorder=3)
 
-    # Adjust layout
-    plt.tight_layout()
-    fig.subplots_adjust(top=0.88)
+    # Speedup labels on C bars
+    for bar, speedup in zip(bars_c, speedups):
+        label = f'{speedup:.0f}x' if speedup >= 10 else f'{speedup:.1f}x'
+        ax2.annotate(label, xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                    xytext=(0, 5), textcoords="offset points", ha='center', va='bottom',
+                    fontsize=10, fontweight='bold', color=COLORS['c_engine'])
 
-    # Save with high DPI for quality
+    ax2.set_ylabel('Operations per Second', fontsize=12, color=COLORS['text'], fontweight='bold')
+    ax2.set_title('Analytics Performance (C vs Python)', fontsize=16, fontweight='bold', color=COLORS['text'], pad=15)
+    ax2.set_xticks(x2)
+    ax2.set_xticklabels(analytics_labels, fontsize=10, color=COLORS['text'])
+    ax2.set_yscale('log')
+    ax2.set_ylim(10_000, 5_000_000_000)
+    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, p: format_rate(x)))
+    ax2.grid(True, axis='y', linestyle='--', alpha=0.3, color=COLORS['grid'], zorder=1)
+    ax2.legend(loc='upper right', facecolor=COLORS['panel'], edgecolor=COLORS['grid'], fontsize=10)
+    for spine in ax2.spines.values():
+        spine.set_color(COLORS['grid'])
+
+    # Main title
+    fig.suptitle('ag-kernel Performance', fontsize=22, fontweight='bold', color=COLORS['text'], y=0.98)
+    fig.text(0.5, 0.02, 'Benchmark: Apple M1 | 10M ticks | v0.3.0',
+             ha='center', fontsize=11, color=COLORS['text_secondary'], style='italic')
+
+    plt.tight_layout(rect=[0, 0.04, 1, 0.94])
+
+    # Save
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(
-        output_path,
-        dpi=150,
-        facecolor=fig.get_facecolor(),
-        edgecolor='none',
-        bbox_inches='tight',
-        pad_inches=0.3
-    )
+    fig.savefig(output_path, dpi=150, facecolor=fig.get_facecolor(), edgecolor='none',
+                bbox_inches='tight', pad_inches=0.2)
     plt.close(fig)
 
     print(f"Chart saved to: {output_path}")
@@ -231,28 +129,24 @@ def create_benchmark_chart(labels: list, values: list, output_path: Path) -> Non
 
 
 def main():
-    """Main entry point."""
     print("=" * 60)
     print("ag-kernel Benchmark Chart Generator")
     print("=" * 60)
 
-    # Load benchmark data
-    print(f"\nLoading benchmark data from: {BENCHMARK_RESULTS_PATH}")
-    results = load_benchmark_data(BENCHMARK_RESULTS_PATH)
+    print("\nPerformance Summary:")
+    print("  Tick Processing:")
+    print("    - Pure Python: 62K/s")
+    print("    - NumPy Batch: 626M/s (10,000x faster)")
+    print("\n  Analytics (C vs Python):")
+    print("    - Candles: 84M/s vs 64K/s (1,307x)")
+    print("    - VWAP: 402M/s vs 95M/s (4.2x)")
+    print("    - Volume Profile: 304M/s vs 32M/s (9.6x)")
+    print("    - Cumulative Delta: 1.1B/s vs 218M/s (5.0x)")
+    print("    - Volatility: 114M/s vs 225K/s (507x)")
 
-    # Extract performance metrics
-    labels, values = extract_performance_data(results)
-
-    print("\nPerformance data:")
-    for label, value in zip(labels, values):
-        print(f"  {label.replace(chr(10), ' ')}: {format_ticks_per_sec(value)} ticks/sec")
-
-    # Generate chart
     print(f"\nGenerating chart...")
-    create_benchmark_chart(labels, values, OUTPUT_PATH)
-
+    create_benchmark_chart(OUTPUT_PATH)
     print("\nDone!")
-    print("=" * 60)
 
 
 if __name__ == '__main__':
