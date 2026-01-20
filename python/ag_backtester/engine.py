@@ -36,7 +36,7 @@ class Order:
 
 @dataclass
 class Snapshot:
-    """Engine state snapshot"""
+    """Engine state snapshot - supports both attribute and dict-like access"""
     ts_ms: int
     cash: float
     position: float
@@ -44,6 +44,14 @@ class Snapshot:
     realized_pnl: float
     unrealized_pnl: float
     equity: float
+
+    def __getitem__(self, key):
+        """Allow dict-like access for backwards compatibility"""
+        return getattr(self, key)
+
+    def __contains__(self, key):
+        """Allow 'in' operator for backwards compatibility"""
+        return hasattr(self, key)
 
 
 class Engine:

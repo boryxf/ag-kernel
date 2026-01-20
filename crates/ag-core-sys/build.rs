@@ -15,6 +15,7 @@ fn main() {
     // Compile C engine
     cc::Build::new()
         .file(core_path.join("engine.c"))
+        .file(core_path.join("agtick.c"))
         .include(&core_path)
         .opt_level(3)
         .compile("ag_engine");
@@ -23,4 +24,6 @@ fn main() {
     println!("cargo:rerun-if-changed={}", core_path.join("engine.c").display());
     println!("cargo:rerun-if-changed={}", core_path.join("engine.h").display());
     println!("cargo:rerun-if-changed={}", core_path.join("types.h").display());
+    println!("cargo:rerun-if-changed={}", core_path.join("agtick.c").display());
+    println!("cargo:rerun-if-changed={}", core_path.join("agtick.h").display());
 }

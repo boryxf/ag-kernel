@@ -9,11 +9,16 @@ High-performance backtesting engine with deterministic execution. Built with a C
 
 ## Features
 
-- **10M+ ticks/sec throughput** - Zero-copy batch processing with streaming Parquet parser
+- **626M+ ticks/sec throughput** - Zero-copy NumPy batch processing
+- **14M+ ticks/sec batch mode** - Optimized C kernel with lazy order compaction
+- **88M+ ticks/sec candle generation** - Polars-based analytics
 - **Deterministic execution** - C kernel ensures reproducible results
 - **Memory safe** - Rust FFI with PyO3 bindings
-- **Production ready** - Comprehensive test suite (26 tests, 96% pass rate)
-- **Correct financial calculations** - All quantity scaling and fee accounting bugs fixed
+- **Parallel backtests** - Multi-process parameter sweeps and Monte Carlo
+- **Full analytics suite** - VWAP, volume profile, volatility estimators
+- **Fixed-point arithmetic** - 18% faster engine option for integer-only calculations
+- **Production ready** - Comprehensive test suite with backwards compatibility
+- **Bubbles visualization** - Interactive order flow analysis with Binance API integration
 
 ## Architecture
 
@@ -109,6 +114,31 @@ sides = [0, 1, 0, 1]  # 0=BUY, 1=SELL
 engine.step_batch(timestamps, price_ticks, qtys, sides)
 ```
 
+## Bubbles Visualization 🎨
+
+Visualize order flow with interactive bubble charts:
+
+```bash
+# Quick demo with local data (no internet needed)
+./examples/demo_bubbles_local.sh
+
+# Fetch live BTCUSDT data from Binance
+python examples/bubbles_visualization.py --fetch --limit 1000
+
+# Compare multiple strategies side-by-side
+python examples/bubbles_advanced.py --fetch --limit 1000 --compare
+```
+
+**Features:**
+- Real-time data from Binance Open API
+- Multiple strategies (mean-reversion, momentum, random)
+- Bubble size = order quantity
+- Color coding: BUY (green) / SELL (red)
+- Equity curve analysis
+- Dark-themed matplotlib output
+
+See [examples/BUBBLES_README.md](examples/BUBBLES_README.md) for full documentation.
+
 ## Testing
 
 ```bash
@@ -135,13 +165,92 @@ pytest tests/ --cov=ag_backtester --cov-report=html
 
 ## Performance
 
+![ag-kernel Performance Comparison](docs/benchmark_chart.png)
+
+Benchmarked on Apple M1 with real Binance aggTrades data (40M rows):
+
 | Operation | Throughput | Notes |
 |-----------|------------|-------|
-| Batch processing | 10M+ ticks/sec | With zero-copy Parquet parser |
-| Single tick | ~1M ticks/sec | Individual step_tick calls |
-| Memory usage | ~100 MB | For 10M ticks |
+| NumPy batch (zero-copy) | **626M ticks/sec** | Direct numpy array processing |
+| Standard batch | **14M ticks/sec** | With list-to-array conversion |
+| Batch + orders | **19M ticks/sec** | Periodic order placement every 10K ticks |
+| Single tick | 537K ticks/sec | Individual step_tick calls |
+| Candle generation | **88M ticks/sec** | Polars-based OHLCV aggregation |
+| VWAP calculation | 2.4ms for 500K ticks | Cumulative volume-weighted average |
+| Volume profile | 13.8ms for 500K ticks | Price distribution analysis |
+| Volatility | 3.7ms for 500K ticks | Rolling realized volatility |
 
-## Recent Fixes (v0.2.1)
+### Optimization Summary
+
+| Component | Before | After | Improvement |
+|-----------|--------|-------|-------------|
+| Aggregation (dict → Polars) | 62K rows/sec | 9.6M rows/sec | **154x faster** |
+| Tick processing | 88K rows/sec | 14M ticks/sec | **159x faster** |
+| Fixed-point engine | 0.71ms/100K ticks | 0.58ms/100K ticks | **18% faster** |
+
+## What's New in v0.3.0
+
+### Performance Optimizations
+
+- **Zero-copy NumPy batch processing** - 626M ticks/sec with direct array access
+- **C kernel batch API** - Single FFI call for N ticks instead of N calls
+- **Lazy order compaction** - Deferred cleanup reduces overhead
+- **SIMD hints & cache alignment** - 64-byte aligned structures
+
+### New Features
+
+#### Analytics Module
+```python
+from ag_backtester.analytics import (
+    ticks_to_candles, resample_candles,
+    calculate_vwap, calculate_volume_profile,
+    calculate_realized_volatility, calculate_garman_klass_volatility,
+)
+
+# Generate OHLCV candles from tick data
+candles = ticks_to_candles(timestamps, price_ticks, qtys, sides,
+                            tick_size=0.01, interval_ms=60000)
+
+# Calculate volume profile with 100 price bins
+profile = calculate_volume_profile(price_ticks, qtys, sides, n_bins=100)
+```
+
+#### Parallel Backtests
+```python
+from ag_backtester import run_parallel_backtests, run_parameter_sweep
+
+# Run 100 parameter combinations across 8 CPU cores
+configs = [{'maker_fee': f/10000} for f in range(1, 101)]
+results = run_parallel_backtests(configs, data_loader, strategy, n_workers=8)
+
+# Monte Carlo simulation
+from ag_backtester import run_monte_carlo
+mc_results = run_monte_carlo(base_config, data_loader, strategy,
+                              n_simulations=1000, param_ranges={'spread_bps': (1, 5)})
+```
+
+#### Fixed-Point Engine (C)
+```c
+#include "fixed_point.h"
+
+// 18% faster than double-precision
+engine_fixed_handle_t* engine = engine_fixed_new(&config);
+engine_fixed_step_batch(engine, ticks, count);
+```
+
+#### Fast Data Loading
+```python
+from ag_backtester.data.aggtrades import load_vectorized
+from ag_backtester.data.parquet_loader import load_parquet_mmap
+
+# Vectorized CSV loading - 830M rows/sec
+ts, prices, qtys, sides = load_vectorized("data.csv")
+
+# Memory-mapped Parquet - minimal memory footprint
+df = load_parquet_mmap("data.parquet", columns=['price', 'qty'])
+```
+
+## Previous Fixes (v0.2.1)
 
 ### Critical Bugs Fixed
 
@@ -170,6 +279,8 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 
 - [CHANGELOG.md](CHANGELOG.md) - Version history
 - [CRITICAL_AUDIT_REPORT.md](CRITICAL_AUDIT_REPORT.md) - Security and correctness audit
+- [examples/BUBBLES_README.md](examples/BUBBLES_README.md) - Bubbles visualization guide
+- [PROMPT_FOR_AGENTS.md](PROMPT_FOR_AGENTS.md) - AI agent developer guide
 - [tests/](tests/) - Test suite with examples
 
 ## API Reference
@@ -189,10 +300,43 @@ class EngineConfig:
 ### Engine Methods
 
 - `step_tick(tick: Tick)` - Process single tick
-- `step_batch(timestamps, price_ticks, qtys, sides)` - Process batch of ticks
+- `step_batch(timestamps, price_ticks, qtys, sides)` - Process batch of ticks (14M/sec)
+- `step_batch_numpy(ts, prices, qtys, sides)` - Zero-copy NumPy batch (626M/sec)
 - `place_order(order: Order)` - Place market or limit order
 - `get_snapshot() -> Snapshot` - Get current state
 - `reset()` - Reset to initial state
+
+### Analytics Functions
+
+```python
+from ag_backtester.analytics import (
+    # Candle generation
+    ticks_to_candles,        # Tick data → OHLCV candles
+    resample_candles,        # Resample to larger timeframes
+
+    # Volume analysis
+    calculate_vwap,          # Cumulative VWAP
+    calculate_volume_profile,# Price-volume distribution
+    calculate_order_flow_imbalance,  # Rolling OFI
+    calculate_cumulative_delta,      # Buy-sell delta
+
+    # Volatility estimators
+    calculate_realized_volatility,   # Close-to-close
+    calculate_parkinson_volatility,  # High-low range
+    calculate_garman_klass_volatility, # OHLC-based
+    calculate_yang_zhang_volatility, # Overnight-adjusted
+)
+```
+
+### Parallel Execution
+
+```python
+from ag_backtester import (
+    run_parallel_backtests,  # Parallel parameter testing
+    run_monte_carlo,         # Monte Carlo simulations
+    run_parameter_sweep,     # Grid search
+)
+```
 
 ### Snapshot
 

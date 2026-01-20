@@ -46,6 +46,7 @@ Cargo.lock
 *.exe
 test_scaling
 engine.o
+test_agtick
 
 # IDEs
 .vscode/
@@ -68,3 +69,16 @@ FIX_SUMMARY.md
 *.whl
 *.egg-info/
 .maturin/
+
+# Benchmark data (download from Binance Vision)
+benchmark_data/
+benchmarks/results/
+
+# Generated outputs
+outputs/
+
+# Claude context
+.claude/
+
+# Test artifacts
+core/test_agtick

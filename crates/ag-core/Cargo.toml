@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 ag-core-sys = { path = "../ag-core-sys" }
 pyo3 = { workspace = true }
+numpy = "0.22"
 
 # OHLC data structures and parsers
 bytemuck = { version = "1.14", features = ["derive"] }
@@ -20,3 +21,6 @@ thiserror = "1.0"
 
 [build-dependencies]
 pyo3-build-config = "0.22"
+
+[dev-dependencies]
+tempfile = "3.10"
