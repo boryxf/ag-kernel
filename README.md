@@ -167,7 +167,7 @@ pytest tests/ --cov=ag_backtester --cov-report=html
 
 ![ag-kernel Performance Comparison](docs/benchmark_chart.png)
 
-Benchmarked on Apple M1 with real Binance aggTrades data (40M rows):
+Benchmarked on Apple M4 with real Binance aggTrades data (40M rows):
 
 | Operation | Throughput | Notes |
 |-----------|------------|-------|
